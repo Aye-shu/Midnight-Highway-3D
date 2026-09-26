@@ -41,10 +41,10 @@ int weatherType = 0;
 int lightningTimer = 0;
 int lightningFlashFrames = 0;
 int shakeTime = 0;
-float timeOfDay = 0.0f;   // ===== FIXED: permanently night =====
+float timeOfDay = 0.0f;   // permanently night
 
 // ===== SOUND STATE ===== 
-const char* currentAmbientFile = "engine.wav";
+const char* currentAmbientFile = "";   // no ambient at start
 int ambientRestartTimer = 0;
 // ========================
 
@@ -77,7 +77,12 @@ GLuint treeDisplayList;
 void playAmbientLoop(const char* filename) {
     currentAmbientFile = filename;
     ambientRestartTimer = 0;
-    PlaySoundA(filename, NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+    if (filename[0] == '\0') {
+        PlaySoundA(NULL, NULL, 0);   // stop any sound
+    }
+    else {
+        PlaySoundA(filename, NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+    }
 }
 
 void playOneShot(const char* filename, int restartAfterFrames) {
@@ -89,7 +94,9 @@ void tickAmbientRestart() {
     if (ambientRestartTimer > 0) {
         ambientRestartTimer--;
         if (ambientRestartTimer == 0) {
-            PlaySoundA(currentAmbientFile, NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+            if (currentAmbientFile[0] != '\0') {
+                PlaySoundA(currentAmbientFile, NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+            }
         }
     }
 }
@@ -918,7 +925,7 @@ void resetGame() {
     weatherDuration = 600;
     lightningTimer = 0;
     lightningFlashFrames = 0;
-    playAmbientLoop("engine.wav");
+    playAmbientLoop("");   // stop ambient on reset
 }
 
 void updateGame(int value) {
@@ -1000,10 +1007,14 @@ void updateGame(int value) {
         float dx = carX - trafficCarX[i];
         float dz = carZ - trafficCarZ[i];
         if (fabs(dx) < 2.0f && fabs(dz) < 3.2f) {
+            // ===== FIX: crash sound plays, then ALL sound stops =====
             if (gameState != 2) {
                 shakeTime = 30;
-                playOneShot("crash.wav", 60);
+                PlaySoundA("crash.wav", NULL, SND_FILENAME | SND_ASYNC);
+                ambientRestartTimer = 0;   // no ambient restart after crash
+                currentAmbientFile = "";   // clear so nothing resumes
             }
+            // ========================================================
             gameState = 2;
         }
 
@@ -1039,10 +1050,6 @@ void updateGame(int value) {
     if (carX > 5.0f) carX = 5.0f;
     else if (carX < -5.0f) carX = -5.0f;
 
-    // ===== FIXED: day/night cycle removed, permanently night =====
-    // (timeOfDay stays at 0.0f — no increment)
-    // ============================================================
-
     weatherTimer++;
     if (weatherTimer >= weatherDuration) {
         weatherType = rand() % 3;
@@ -1054,7 +1061,7 @@ void updateGame(int value) {
             playAmbientLoop("rain.wav");
         }
         else {
-            playAmbientLoop("engine.wav");
+            playAmbientLoop("");   // no ambient when clear
         }
     }
     if (weatherType == 2) {
@@ -1062,7 +1069,7 @@ void updateGame(int value) {
         if (lightningTimer > 120 + (int)(rand() % 240)) {
             lightningFlashFrames = 3;
             lightningTimer = 0;
-            playOneShot("thunder.wav", 40);
+            playOneShot("thunder.wav", 150);
         }
     }
     else {
@@ -1102,7 +1109,7 @@ void processNormalKeys(unsigned char key, int xx, int yy) {
     }
 
     if (key == 'h' || key == 'H') {
-        playOneShot("horn.wav", 30);
+        if (gameState == 1) playOneShot("horn.wav", 30);
         return;
     }
 
@@ -1421,7 +1428,7 @@ int main(int argc, char** argv) {
     glutInitWindowSize(900, 600);
     glutCreateWindow("Celestial Drive 3D - Ultimate Speed & Overtake Edition");
     initScene();
-    playAmbientLoop("engine.wav");
+    // (no engine.wav — no ambient started at launch)
     glutDisplayFunc(renderScene);
     glutReshapeFunc(changeSize);
     glutTimerFunc(0, updateGame, 0);
